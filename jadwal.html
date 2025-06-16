@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Jadwal Shift Otomatis</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; text-align: center; }
+    th, td { border: 1px solid #444; padding: 8px; }
+    th.hari { background-color: #f2a365; }
+    .off { background-color: #333; color: white; }
+    .weekend { background-color: #faff94; }
+    button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
+    .total { background-color: #d0f0d0; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<h2>MIXUE PURWO EX SUN PLAZA</h2>
+<button onclick="buatJadwal()">🔄 Buat Jadwal Baru</button>
+
+<table id="jadwal-table">
+  <thead>
+    <tr>
+      <th>Nama</th>
+      <th class="hari">Senin</th>
+      <th class="hari">Selasa</th>
+      <th class="hari">Rabu</th>
+      <th class="hari">Kamis</th>
+      <th class="hari">Jumat</th>
+      <th class="hari weekend">Sabtu</th>
+      <th class="hari weekend">Minggu</th>
+      <th>P</th>
+      <th>S</th>
+    </tr>
+  </thead>
+  <tbody id="jadwal-body"></tbody>
+</table>
+
+<script>
+const namaKaryawan = ["Egi", "Aldo", "Octa", "Tera", "Rara"];
+const hariCount = 7;
+
+function generateJadwal() {
+  let maxCoba = 5000;
+  while (maxCoba--) {
+    let jadwal = {};
+    let hariMatrix = Array.from({ length: hariCount }, () => []);
+
+    for (const nama of namaKaryawan) {
+      let berhasil = false;
+      let shift;
+      for (let coba = 0; coba < 50; coba++) {
+        shift = Array(7).fill("S");
+        const offIndex = Math.floor(Math.random() * 5); // OFF di Senin–Jumat
+
+        shift[offIndex] = "OFF";
+        shift = shift.map((v, i) => v === "S" ? (Math.random() > 0.5 ? "P" : "S") : "OFF");
+
+        if (
+          offIndex < 5 &&
+          shift[offIndex] === "OFF" &&
+          (offIndex === 0 || shift[offIndex - 1] === "P") &&
+          (offIndex === 6 || shift[offIndex + 1] === "S")
+        ) {
+          berhasil = true;
+          break;
+        }
+      }
+
+      if (!berhasil) continue;
+
+      jadwal[nama] = shift;
+      for (let h = 0; h < hariCount; h++) {
+        hariMatrix[h].push(shift[h]);
+      }
+    }
+
+    if (Object.keys(jadwal).length !== namaKaryawan.length) continue;
+
+    let valid = true;
+    for (let h = 0; h < hariCount; h++) {
+      const hari = hariMatrix[h];
+      const count = { P: 0, S: 0, OFF: 0 };
+      for (const s of hari) count[s] = (count[s] || 0) + 1;
+
+      if (h < 5 && count["OFF"] !== 1) { valid = false; break; } // Senin–Jumat 1 OFF
+      if (h >= 5 && count["OFF"] > 0) { valid = false; break; }  // Sabtu/Minggu no OFF
+      if (count["P"] < 2 || count["S"] < 2) { valid = false; break; }
+    }
+
+    if (valid) return jadwal;
+  }
+  return null;
+}
+
+function buatJadwal() {
+  const tbody = document.getElementById("jadwal-body");
+  tbody.innerHTML = "";
+  const jadwal = generateJadwal();
+
+  if (!jadwal) {
+    alert("❌ Gagal membuat jadwal valid. Coba lagi.");
+    return;
+  }
+
+  for (const nama of namaKaryawan) {
+    const tr = document.createElement("tr");
+    const tdNama = document.createElement("td");
+    tdNama.textContent = nama;
+    tr.appendChild(tdNama);
+
+    let countP = 0, countS = 0;
+
+    jadwal[nama].forEach((s, i) => {
+      const td = document.createElement("td");
+      td.textContent = s;
+      if (s === "P") countP++;
+      if (s === "S") countS++;
+      if (s === "OFF") td.classList.add("off");
+      if (i >= 5) td.classList.add("weekend");
+      tr.appendChild(td);
+    });
+
+    const tdP = document.createElement("td");
+    tdP.textContent = countP;
+    tdP.classList.add("total");
+    tr.appendChild(tdP);
+
+    const tdS = document.createElement("td");
+    tdS.textContent = countS;
+    tdS.classList.add("total");
+    tr.appendChild(tdS);
+
+    tbody.appendChild(tr);
+  }
+}
+
+buatJadwal();
+</script>
+
+</body>
+</html>
