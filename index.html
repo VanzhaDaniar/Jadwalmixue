@@ -1,143 +1,410 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <title>Jadwal Shift Otomatis</title>
+  <meta charset="UTF-8" />
+  <title>Jadwal Shift 35 Hari - Per Minggu</title>
   <style>
+    body.pdf-mode input.tgl-input:placeholder-shown,
+body.pdf-mode input.gc-input:placeholder-shown {
+  display: none;
+}
+
     body { font-family: Arial, sans-serif; padding: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; text-align: center; }
-    th, td { border: 1px solid #444; padding: 8px; }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; text-align: center; font-size: 12px; }
+    th, td { border: 1px solid #444; padding: 6px; }
     th.hari { background-color: #f2a365; }
     .off { background-color: #333; color: white; }
     .weekend { background-color: #faff94; }
-    button { padding: 10px 20px; font-size: 16px; margin-top: 10px; }
     .total { background-color: #d0f0d0; font-weight: bold; }
+    button { padding: 8px 16px; margin: 5px 5px 5px 0; }
+    input.tgl-input, input.shift-input {
+      width: 100%; border: none; text-align: center; font-size: 12px; background: transparent;
+    }
+    input.shift-input { background-color: #eef; }
+    .minggu-wrapper { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; }
   </style>
 </head>
 <body>
 
-<h2>MIXUE PURWO EX SUN PLAZA</h2>
-<button onclick="buatJadwal()">🔄 Buat Jadwal Baru</button>
+<h2>Jadwal Shift 35 Hari (Mingguan) - MIXUE PURWO</h2>
+<button onclick="generateFullSchedule()">🔄 Buat Jadwal Otomatis</button>
+<button onclick="resetTanggal()">🧹 Reset Tanggal</button>
+<button onclick="downloadPDF()">⬇️ Download PDF</button>
+<button onclick="simpanShift()">💾 Simpan Jadwal</button>
+<button onclick="muatShift()">📂 Muat Jadwal</button>
 
-<table id="jadwal-table">
-  <thead>
-    <tr>
-      <th>Nama</th>
-      <th class="hari">Senin</th>
-      <th class="hari">Selasa</th>
-      <th class="hari">Rabu</th>
-      <th class="hari">Kamis</th>
-      <th class="hari">Jumat</th>
-      <th class="hari weekend">Sabtu</th>
-      <th class="hari weekend">Minggu</th>
-      <th>P</th>
-      <th>S</th>
-    </tr>
-  </thead>
-  <tbody id="jadwal-body"></tbody>
-</table>
 
+<div id="mingguan-container"></div>
+
+<!-- html2pdf -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
-const namaKaryawan = ["Egi", "Aldo", "Octa", "Tera", "Rara"];
-const hariCount = 7;
+ function updateTotalBulanan() {
+  const rows = document.querySelectorAll(".minggu-wrapper:last-child tbody tr");
+  rows.forEach(tr => {
+    const nama = tr.querySelector("td")?.textContent;
+    if (!namaKaryawan.includes(nama)) return;
 
-function generateJadwal() {
-  let maxCoba = 5000;
-  while (maxCoba--) {
-    let jadwal = {};
-    let hariMatrix = Array.from({ length: hariCount }, () => []);
-
-    for (const nama of namaKaryawan) {
-      let berhasil = false;
-      let shift;
-      for (let coba = 0; coba < 50; coba++) {
-        shift = Array(7).fill("S");
-        const offIndex = Math.floor(Math.random() * 5); // OFF di Senin–Jumat
-
-        shift[offIndex] = "OFF";
-        shift = shift.map((v, i) => v === "S" ? (Math.random() > 0.5 ? "P" : "S") : "OFF");
-
-        if (
-          offIndex < 5 &&
-          shift[offIndex] === "OFF" &&
-          (offIndex === 0 || shift[offIndex - 1] === "P") &&
-          (offIndex === 6 || shift[offIndex + 1] === "S")
-        ) {
-          berhasil = true;
-          break;
-        }
-      }
-
-      if (!berhasil) continue;
-
-      jadwal[nama] = shift;
-      for (let h = 0; h < hariCount; h++) {
-        hariMatrix[h].push(shift[h]);
-      }
+    let totalP = 0, totalS = 0;
+    for (let i = 0; i < totalHari; i++) {
+      if (shiftMatrix[nama][i] === "P") totalP++;
+      if (shiftMatrix[nama][i] === "S") totalS++;
     }
 
-    if (Object.keys(jadwal).length !== namaKaryawan.length) continue;
-
-    let valid = true;
-    for (let h = 0; h < hariCount; h++) {
-      const hari = hariMatrix[h];
-      const count = { P: 0, S: 0, OFF: 0 };
-      for (const s of hari) count[s] = (count[s] || 0) + 1;
-
-      if (h < 5 && count["OFF"] !== 1) { valid = false; break; } // Senin–Jumat 1 OFF
-      if (h >= 5 && count["OFF"] > 0) { valid = false; break; }  // Sabtu/Minggu no OFF
-      if (count["P"] < 2 || count["S"] < 2) { valid = false; break; }
-    }
-
-    if (valid) return jadwal;
-  }
-  return null;
+    tr.querySelector("td:nth-child(2)").textContent = totalP;
+    tr.querySelector("td:nth-child(3)").textContent = totalS;
+  });
 }
 
-function buatJadwal() {
-  const tbody = document.getElementById("jadwal-body");
-  tbody.innerHTML = "";
-  const jadwal = generateJadwal();
+const namaKaryawan = ["Egi", "Aldo", "Octa", "Tera", "Rara"];
+const totalHari = 35;
+let shiftMatrix = {};
 
-  if (!jadwal) {
-    alert("❌ Gagal membuat jadwal valid. Coba lagi.");
-    return;
+function generateFullSchedule() {
+  const container = document.getElementById("mingguan-container");
+  container.innerHTML = "";
+
+  namaKaryawan.forEach(nama => shiftMatrix[nama] = new Array(totalHari).fill(""));
+
+  const pCount = {}, sCount = {};
+  namaKaryawan.forEach(nama => { pCount[nama] = 0; sCount[nama] = 0; });
+
+  for (let minggu = 0; minggu < 5; minggu++) {
+    const awal = minggu * 7;
+    const akhir = awal + 7;
+    const liburHari = shuffleArray([0,1,2,3,4]);
+
+    namaKaryawan.forEach((nama, index) => {
+      const idx = awal + liburHari[index % liburHari.length];
+      shiftMatrix[nama][idx] = "OFF";
+
+      if (idx - 1 >= awal && shiftMatrix[nama][idx - 1] === "") {
+        shiftMatrix[nama][idx - 1] = "P";
+        pCount[nama]++;
+      }
+      if (idx + 1 < akhir && shiftMatrix[nama][idx + 1] === "") {
+        shiftMatrix[nama][idx + 1] = "S";
+        sCount[nama]++;
+      }
+    });
+
+    for (let i = awal; i < akhir; i++) {
+      const assigned = namaKaryawan.filter(nama => shiftMatrix[nama][i] !== "");
+      const unassigned = namaKaryawan.filter(nama => shiftMatrix[nama][i] === "");
+      shuffleArray(unassigned);
+
+      let remainingP = 2;
+      let remainingS = 2;
+
+      assigned.forEach(nama => {
+        if (shiftMatrix[nama][i] === "P") remainingP--;
+        if (shiftMatrix[nama][i] === "S") remainingS--;
+      });
+
+      for (let j = 0; j < unassigned.length; j++) {
+        const nama = unassigned[j];
+        let shift = "";
+
+        if (remainingP > 0 && (pCount[nama] <= sCount[nama] || remainingS === 0)) {
+          shift = "P";
+          pCount[nama]++;
+          remainingP--;
+        } else {
+          shift = "S";
+          sCount[nama]++;
+          remainingS--;
+        }
+
+        shiftMatrix[nama][i] = shift;
+      }
+    }
+
+    container.appendChild(buatTabelMingguan(awal, akhir, minggu + 1));
   }
 
-  for (const nama of namaKaryawan) {
+  container.appendChild(buatTabelTotalBulanan());
+}
+
+function buatTabelMingguan(start, end, mingguKe) {
+  const div = document.createElement("div");
+  div.className = "minggu-wrapper";
+  const table = document.createElement("table");
+
+  const thead = document.createElement("thead");
+  const trHari = document.createElement("tr");
+  trHari.innerHTML = `<th>Nama</th>`;
+  const hariIndo = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+  for (let i = start; i < end; i++) {
+    const namaHari = hariIndo[i % 7];
+    trHari.innerHTML += `<th class="hari">${namaHari}</th>`;
+  }
+  trHari.innerHTML += `<th>P</th><th>S</th>`;
+  thead.appendChild(trHari);
+
+  const trTgl = document.createElement("tr");
+  trTgl.innerHTML = `<th>Tanggal</th>`;
+  for (let i = start; i < end; i++) {
+    trTgl.innerHTML += `<th><input type="text" class="tgl-input" data-idx="${i}" placeholder="Tulis tanggal di sini" /></th>`;
+
+  }
+  trTgl.innerHTML += `<th colspan="2"></th>`;
+  thead.appendChild(trTgl);
+
+  const tbody = document.createElement("tbody");
+
+  namaKaryawan.forEach(nama => {
     const tr = document.createElement("tr");
     const tdNama = document.createElement("td");
     tdNama.textContent = nama;
     tr.appendChild(tdNama);
 
-    let countP = 0, countS = 0;
+    let p = 0, s = 0;
 
-    jadwal[nama].forEach((s, i) => {
+    for (let i = start; i < end; i++) {
       const td = document.createElement("td");
-      td.textContent = s;
-      if (s === "P") countP++;
-      if (s === "S") countS++;
-      if (s === "OFF") td.classList.add("off");
-      if (i >= 5) td.classList.add("weekend");
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "shift-input";
+      input.value = shiftMatrix[nama][i];
+      input.dataset.nama = nama;
+      input.dataset.idx = i;
+      input.addEventListener("input", updateCount);
+      td.appendChild(input);
+
+      if (i % 7 >= 5) td.classList.add("weekend");
+      if (input.value === "OFF") td.classList.add("off");
+      if (input.value === "P") p++;
+      if (input.value === "S") s++;
+
       tr.appendChild(td);
-    });
+    }
 
     const tdP = document.createElement("td");
-    tdP.textContent = countP;
-    tdP.classList.add("total");
-    tr.appendChild(tdP);
+    tdP.className = "total";
+    tdP.textContent = p;
 
     const tdS = document.createElement("td");
-    tdS.textContent = countS;
-    tdS.classList.add("total");
-    tr.appendChild(tdS);
+    tdS.className = "total";
+    tdS.textContent = s;
 
+    tr.appendChild(tdP);
+    tr.appendChild(tdS);
     tbody.appendChild(tr);
-  }
+  });
+
+  // Tambahkan baris info shift
+  const trShiftInfo = document.createElement("tr");
+  const tdShiftLabel = document.createElement("td");
+  tdShiftLabel.colSpan = end - start + 3; // seluruh kolom
+  tdShiftLabel.innerHTML = `<strong>Shift:</strong> Pagi (08:00 - 16:00) | Siang (14:00 - 22:00)`;
+  trShiftInfo.appendChild(tdShiftLabel);
+  tbody.appendChild(trShiftInfo);
+
+  // Tambahkan baris General Cleaning
+  const trGC = document.createElement("tr");
+  const tdGCLabel = document.createElement("td");
+  tdGCLabel.colSpan = 2;
+  tdGCLabel.innerHTML = `<strong>General Cleaning:</strong>`;
+
+  const tdGCInput = document.createElement("td");
+  tdGCInput.colSpan = end - start + 1;
+  tdGCInput.innerHTML = `<input type="text" class="gc-input" data-minggu="${mingguKe}" placeholder="Tulis tanggal di sini" style="width: 100%; padding: 4px;" />`;
+
+
+  trGC.appendChild(tdGCLabel);
+  trGC.appendChild(tdGCInput);
+  tbody.appendChild(trGC);
+
+  table.appendChild(thead); 
+  
+  table.appendChild(tbody);
+  div.innerHTML = `<h3>Minggu ${mingguKe}</h3>`;
+const downloadBtn = document.createElement("button");
+downloadBtn.textContent = "⬇️ Download Minggu Ini";
+downloadBtn.style.marginBottom = "20px";
+downloadBtn.addEventListener("click", () => downloadMingguan(div, mingguKe));
+
+div.appendChild(downloadBtn);
+div.appendChild(table);
+
+  
+  return div;
 }
 
-buatJadwal();
-</script>
+function buatTabelTotalBulanan() {
+  const div = document.createElement("div");
+  div.className = "minggu-wrapper";
+  const table = document.createElement("table");
 
+  const thead = document.createElement("thead");
+  const trHeader = document.createElement("tr");
+  trHeader.innerHTML = `<th>Nama</th><th>Total P</th><th>Total S</th>`;
+  thead.appendChild(trHeader);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+
+  namaKaryawan.forEach(nama => {
+    let totalP = 0, totalS = 0;
+    for (let i = 0; i < totalHari; i++) {
+      if (shiftMatrix[nama][i] === "P") totalP++;
+      if (shiftMatrix[nama][i] === "S") totalS++;
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${nama}</td><td class="total">${totalP}</td><td class="total">${totalS}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  div.innerHTML = `<h3>Total Shift 35 Hari</h3>`;
+  div.appendChild(table);
+  return div;
+}
+
+function updateCount(e) {
+  const input = e.target;
+  const nama = input.dataset.nama;
+  const idx = parseInt(input.dataset.idx);
+  const val = input.value.toUpperCase();
+
+  shiftMatrix[nama][idx] = val;
+
+  const tr = input.closest("tr");
+  const inputs = tr.querySelectorAll(".shift-input");
+  let p = 0, s = 0;
+  inputs.forEach(i => {
+    const v = i.value.toUpperCase();
+    if (v === "P") p++;
+    if (v === "S") s++;
+    i.parentElement.classList.toggle("off", v === "OFF");
+  });
+
+  tr.querySelector(".total:nth-last-child(2)").textContent = p;
+  tr.querySelector(".total:last-child").textContent = s;
+
+  updateTotalBulanan(); // ⬅️ Tambahkan baris ini
+}
+
+
+function resetTanggal() {
+  document.querySelectorAll(".tgl-input").forEach(input => input.value = "");
+}
+
+function downloadPDF() {
+  document.body.classList.add("pdf-mode"); // Aktifkan mode PDF
+
+  html2pdf().set({
+    margin: 0.5,
+    filename: 'jadwal-shift-35hari.pdf',
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+  })
+  .from(document.body)
+  .save()
+  .then(() => {
+    document.body.classList.remove("pdf-mode"); // Kembalikan ke normal
+  });
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// generateFullSchedule(); // Hapus atau komentari agar tidak langsung overwrite data saat buka halaman
+
+if (localStorage.getItem("shiftData")) {
+  muatShift();
+}
+
+function simpanShift() {
+  const data = {
+    shiftMatrix,
+    tanggal: {},
+    gcTanggal: {}
+  };
+
+  document.querySelectorAll(".tgl-input").forEach(input => {
+    const idx = input.dataset.idx;
+    data.tanggal[idx] = input.value;
+  });
+
+  document.querySelectorAll(".gc-input").forEach(input => {
+    const minggu = input.dataset.minggu;
+    data.gcTanggal[minggu] = input.value;
+  });
+
+  localStorage.setItem("shiftData", JSON.stringify(data));
+  alert("Jadwal berhasil disimpan!");
+}
+
+
+function muatShift() {
+  const saved = JSON.parse(localStorage.getItem("shiftData"));
+  if (!saved) return alert("Tidak ada data tersimpan.");
+
+  shiftMatrix = saved.shiftMatrix;
+
+  generateUlangDariShiftMatrix();
+
+  const tanggalData = saved.tanggal || {};
+  Object.entries(tanggalData).forEach(([idx, val]) => {
+    const input = document.querySelector(`.tgl-input[data-idx='${idx}']`);
+    if (input) input.value = val;
+  });
+
+  const gcData = saved.gcTanggal || {};
+  Object.entries(gcData).forEach(([minggu, val]) => {
+    const input = document.querySelector(`.gc-input[data-minggu='${minggu}']`);
+    if (input) input.value = val;
+  });
+}
+
+
+function generateUlangDariShiftMatrix() {
+  const container = document.getElementById("mingguan-container");
+  container.innerHTML = "";
+
+  // Hitung ulang jumlah P dan S
+  const pCount = {}, sCount = {};
+  namaKaryawan.forEach(nama => {
+    pCount[nama] = 0;
+    sCount[nama] = 0;
+    for (let i = 0; i < totalHari; i++) {
+      if (shiftMatrix[nama][i] === "P") pCount[nama]++;
+      if (shiftMatrix[nama][i] === "S") sCount[nama]++;
+    }
+  });
+
+  for (let minggu = 0; minggu < 5; minggu++) {
+    const awal = minggu * 7;
+    const akhir = awal + 7;
+    container.appendChild(buatTabelMingguan(awal, akhir, minggu + 1));
+  }
+
+  container.appendChild(buatTabelTotalBulanan());
+}
+
+function downloadMingguan(element, mingguKe) {
+  const clone = element.cloneNode(true); // Salin elemen minggu
+  const wrapper = document.createElement("div");
+  wrapper.appendChild(clone);
+  wrapper.classList.add("pdf-mode");
+
+  html2pdf().set({
+    margin: 0.5,
+    filename: `jadwal-minggu-${mingguKe}.pdf`,
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+  })
+  .from(wrapper)
+  .save();
+}
+
+</script>
 </body>
 </html>
